@@ -1,0 +1,64 @@
+name: Publicar documentación
+
+on:
+  schedule:
+    - cron: "0 11 * * *" # 06:00 en Ecuador (UTC-5)
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Rama del proyecto que se publica
+        default: main
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Construir el sitio
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el proyecto
+        uses: actions/checkout@v4
+        with:
+          repository: RCL05/seguimiento_de_recomendaciones_CGE
+          ref: ${{ inputs.ref || 'main' }}
+
+      - name: Instalar Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: 1.11.9
+
+      - name: Ajustar la dirección del sitio
+        run: sed -i 's#^\(\s*site-url:\).*#\1 "https://brtrl3.github.io/sitra-cge-docs/"#' docs/_quarto.yml
+
+      - name: Construir
+        run: quarto render docs
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Generar el artefacto
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_site
+
+  deploy:
+    name: Publicar en GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Desplegar
+        id: deployment
+        uses: actions/deploy-pages@v4
